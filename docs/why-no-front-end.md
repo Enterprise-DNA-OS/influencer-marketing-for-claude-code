@@ -16,6 +16,7 @@ That layer used to be the whole product, because talking to a database was hard.
 - **A visual board.** Stages are a table you ask about, not cards you drag.
 - **A phone app.** It runs where Claude Code runs.
 - **A vendor help desk.** This is open source. Enterprise DNA supports the installed version for businesses that want someone to call.
+- **Creator search and automatic post tracking.** GRIN searches social networks for new creators and finds program posts on its own. Here you add the creators you find and record each post and its numbers. Enterprise DNA connects a discovery tool or the platforms' own reporting for businesses that want it.
 
 ## Who this fits
 

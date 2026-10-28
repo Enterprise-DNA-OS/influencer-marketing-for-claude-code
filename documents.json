@@ -1,11 +1,36 @@
 [
   {
-    "name": "example",
-    "title": "TODO(author): the first document this industry must produce",
-    "for_each": "select gen_random_uuid() as id, 'Example' as name",
+    "name": "collaboration-terms",
+    "title": "Collaboration brief and terms",
+    "for_each": "select k.id, k.code || ' ' || c.full_name as name from collaborations k join creators c on c.id = k.creator_id where k.stage in ('invited', 'accepted') order by k.code",
     "file": "name",
     "sections": [
-      { "title": "Details", "sql": "select 'replace me' as item, $1::text as record_id" }
+      { "title": "Between", "layout": "record", "sql": "select coalesce((select value from settings where key = 'business_name'), 'The brand') as engaged_by, b.name as brand, c.full_name as creator, coalesce(c.agent_name, '') as represented_by, k.code as reference, coalesce(k.agreement_ref, '') as agreement_number from collaborations k join campaigns cp on cp.id = k.campaign_id join brands b on b.id = cp.brand_id join creators c on c.id = k.creator_id where k.id = $1" },
+      { "title": "The campaign", "layout": "record", "sql": "select cp.name as campaign, cp.starts_on as runs_from, cp.ends_on as runs_to, cp.brief, coalesce(cp.hashtag, '') as hashtag, coalesce(k.discount_code, '') as your_discount_code from collaborations k join campaigns cp on cp.id = k.campaign_id where k.id = $1" },
+      { "title": "What you will make", "sql": "select d.code as reference, replace(d.kind, '_', ' ') as deliverable, coalesce(d.platform, '') as platform, d.due_on as draft_and_post_by from deliverables d where d.collaboration_id = $1 order by d.due_on" },
+      { "title": "Labelling the post as an ad", "layout": "record", "sql": "select cp.disclosure_label as label_to_use, 'Start the caption with this label, before any other text, hashtag or link, so a viewer knows it is an ad the moment they see it. Every post, reel and story frame about the product carries it, including gifted product. A label only in your bio is not enough.' as how, case when b.category = 'therapeutic' and b.market like '%AU%' then 'These are therapeutic goods advertised in Australia. Talk about what the product is and why you keep it; do not describe your own results or experience of using it (Therapeutic Goods Advertising Code s 24(4)).' else '' end as therapeutic_goods, 'Advertising Standards Code Rule 2(a) (NZ); AANA Code of Ethics s 2.7 (AU).' as rule from collaborations k join campaigns cp on cp.id = k.campaign_id join brands b on b.id = cp.brand_id where k.id = $1" },
+      { "title": "Fee and rights", "layout": "record", "sql": "select b.currency, k.fee_cents as fee_cents, case when c.gst_registered then 'plus GST on your invoice' else 'no GST' end as gst, k.fee_due_days || ' days after the last deliverable is posted, on your invoice' as paid, coalesce(k.usage_rights_until::text, 'none: the brand may share your post but not reuse it') as brand_may_reuse_until, coalesce(k.usage_rights_scope, '') as reuse_where, case when k.whitelisting then 'Yes, until the reuse date' else 'No' end as ads_from_your_handle, coalesce(k.exclusivity_until::text, 'none') as exclusivity_until, coalesce(k.exclusivity_note, '') as exclusivity, '______________________' as creator_signature, '______________________' as date from collaborations k join creators c on c.id = k.creator_id join campaigns cp on cp.id = k.campaign_id join brands b on b.id = cp.brand_id where k.id = $1" }
+    ]
+  },
+  {
+    "name": "campaign-report",
+    "title": "Campaign report",
+    "for_each": "select cp.id, cp.code || ' ' || cp.name as name from campaigns cp where cp.status in ('live', 'wrapped') order by cp.starts_on",
+    "file": "name",
+    "sections": [
+      { "title": "Summary", "layout": "record", "sql": "select r.brand, r.currency, r.name as campaign, r.starts_on as from_date, r.ends_on as to_date, r.creators as creators_on_it, r.posted as posts_live, r.budget_cents as budget_cents, (r.fees_cents + r.gifts_cents) as spent_and_committed_cents, r.views, r.engagements, r.link_clicks, r.code_uses, r.sales_cents as tracked_sales_cents from v_campaign_results r where r.id = $1" },
+      { "title": "By creator", "columns": ["creator", "handle", "posts", "views", "engagements", "code_uses", "sales_cents", "cost_cents"], "sql": "select k.creator, k.currency, k.handle, k.posted as posts, k.views, k.engagements, k.code_uses, k.sales_cents, (case when k.stage = 'cancelled' then k.paid_cents else k.fee_cents end + k.gift_cents) as cost_cents from v_collabs k where k.campaign_id = $1 and k.stage in ('accepted', 'complete', 'cancelled') order by k.sales_cents desc, k.engagements desc" },
+      { "title": "Every post", "sql": "select d.creator, replace(d.kind, '_', ' ') as kind, d.posted_on, coalesce(d.disclosure_label, 'NONE') as ad_label, case when d.label_upfront then 'yes' else 'NO' end as upfront, d.views, d.engagements, d.code_uses, d.post_url from v_deliverables d join campaigns cp on cp.code = d.campaign_code where cp.id = $1 and d.posted_on is not null order by d.posted_on" }
+    ]
+  },
+  {
+    "name": "payment-advice",
+    "title": "Payment advice",
+    "for_each": "select p.id, k.code || ' ' || c.full_name || ' ' || p.paid_on as name from payments p join collaborations k on k.id = p.collaboration_id join creators c on c.id = k.creator_id where p.paid_on is not null order by p.paid_on",
+    "file": "name",
+    "sections": [
+      { "title": "Paid to", "layout": "record", "sql": "select c.full_name as creator, coalesce(c.email, '') as email, coalesce(p.invoice_ref, '') as your_invoice, b.currency, p.amount_cents as amount_paid_cents, p.paid_on, coalesce(p.method, '') as method from payments p join collaborations k on k.id = p.collaboration_id join creators c on c.id = k.creator_id join campaigns cp on cp.id = k.campaign_id join brands b on b.id = cp.brand_id where p.id = $1" },
+      { "title": "For", "layout": "record", "sql": "select cp.name as campaign, b.name as brand, b.currency, k.code as reference, k.fee_cents as agreed_fee_cents, (select coalesce(sum(p2.amount_cents), 0) from payments p2 where p2.collaboration_id = k.id and p2.paid_on is not null) as paid_to_date_cents from payments p join collaborations k on k.id = p.collaboration_id join campaigns cp on cp.id = k.campaign_id join brands b on b.id = cp.brand_id where p.id = $1" }
     ]
   }
 ]

@@ -1,14 +1,31 @@
 [
   {
-    "name": "week",
-    "title": "This week",
-    "subtitle": "Influencer Marketing for Claude Code: what needs attention, rendered by npm run view",
+    "name": "today",
+    "title": "The programme today",
+    "subtitle": "What is late, what needs approving, who is owed and what has gone quiet. Rendered by npm run view",
     "sections": [
-      {
-        "title": "Needs attention",
-        "note": "TODO(author): point this at the industry's attention view (overdue, stuck, quiet).",
-        "sql": "select 'replace me' as item, 'TODO(author)' as why"
-      }
+      { "title": "Content late", "note": "Accepted deliverables past their due date with no post.", "sql": "select code, creator, campaign, replace(kind, '_', ' ') as kind, due_on, days_late from v_deliverables where state = 'overdue' and collab_stage = 'accepted' order by due_on" },
+      { "title": "Waiting for approval", "sql": "select code, creator, campaign, replace(kind, '_', ' ') as kind, draft_received_on, due_on, case when is_testimonial and brand_category = 'therapeutic' and market like '%AU%' then 'TESTIMONIAL: cannot be approved' else '' end as warning from v_deliverables where state = 'awaiting approval' and collab_stage = 'accepted' order by draft_received_on" },
+      { "title": "Posts with a disclosure problem", "note": "No ad label, a label that is not on the accepted list, or a label that is not upfront.", "sql": "select code, creator, campaign, posted_on, coalesce(disclosure_label, 'NONE') as label, case when label_upfront then 'yes' else 'NO' end as upfront, post_url from v_deliverables where posted_on is not null and collab_stage <> 'cancelled' and (disclosure_label is null or label_upfront is not true or position(lower(disclosure_label) in coalesce((select value from settings where key = 'disclosure_labels'), '#ad')) = 0) order by posted_on" },
+      { "title": "Running as ads past usage rights", "sql": "select code, creator, brand, usage_rights_until, ad_running_since from v_deliverables where ad_running and (usage_rights_until is null or usage_rights_until < biz_today())" },
+      { "title": "Gifts in transit", "sql": "select g.code, k.creator, g.product, g.sent_on, g.courier, g.tracking, biz_today() - g.sent_on as days from gifts g join v_collabs k on k.id = g.collaboration_id where g.delivered_on is null order by g.sent_on" }
+    ]
+  },
+  {
+    "name": "campaigns",
+    "title": "Campaigns",
+    "subtitle": "Budget, spend and results per campaign",
+    "sections": [
+      { "title": "Every campaign", "columns": ["code", "name", "brand", "status", "budget_cents", "committed_cents", "posted", "engagements", "code_uses", "sales_cents"], "sql": "select code, name, brand, status, budget_cents, (fees_cents + gifts_cents) as committed_cents, posted, engagements, code_uses, sales_cents from v_campaign_results where status <> 'cancelled' order by starts_on desc" }
+    ]
+  },
+  {
+    "name": "creators",
+    "title": "Creators",
+    "subtitle": "Every creator who has posted, on what an engagement and a sale really cost",
+    "sections": [
+      { "title": "Cost per result", "note": "Cost is fees plus product sent. Engagements are likes, comments, shares and saves from the latest numbers captured.", "sql": "select creator, handle, followers, posted, cost_cents, engagements, round(cost_cents::numeric / nullif(engagements, 0), 2) as cents_per_engagement, code_uses, sales_cents, posted_late from v_creator_performance where posted > 0 order by cost_cents::numeric / nullif(engagements, 0)" },
+      { "title": "Not yet worked with", "sql": "select creator, handle, platform, followers, engagement_rate, status from v_creator_performance where collabs = 0 and status in ('prospect', 'contacted', 'active') order by engagement_rate desc nulls last" }
     ]
   }
 ]
